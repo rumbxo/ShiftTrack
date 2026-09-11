@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
+import { loginAs } from "./support/auth";
 
-const storageKey = "shifttrack-demo-v1";
+const storagePrefix = "shifttrack-demo-v1:";
 const vehicleTask = "Complete vehicle safety check";
 
 async function expectStats(
@@ -31,7 +32,7 @@ async function openMemberForm(page: Page) {
 }
 
 test("completing an overdue task updates totals and activity and survives reload", async ({ page }) => {
-  await page.goto("/");
+  await loginAs(page);
   await expectStats(page, { total: 12, completed: 8, pending: 3, overdue: 1 });
   await expect(page.getByRole("img", { name: "67% of tasks completed" })).toBeVisible();
 
@@ -60,7 +61,7 @@ test("completing an overdue task updates totals and activity and survives reload
 });
 
 test("a new teammate can receive a task that remains searchable and assigned after reload", async ({ page }) => {
-  await page.goto("/");
+  await loginAs(page);
   const memberDialog = await openMemberForm(page);
   await memberDialog.getByRole("textbox", { name: "Full name", exact: true }).fill("Jordan Taylor");
   await memberDialog.getByRole("textbox", { name: "Email address", exact: true }).fill("jordan@example.com");
@@ -110,7 +111,7 @@ test("a new teammate can receive a task that remains searchable and assigned aft
 });
 
 test("member errors stay in the form, settings persist, and reset restores the sample", async ({ page }) => {
-  await page.goto("/");
+  await loginAs(page);
   const dialog = await openMemberForm(page);
   await dialog.getByRole("textbox", { name: "Full name", exact: true }).fill("Jordan Taylor");
   await dialog.getByRole("textbox", { name: "Email address", exact: true }).fill("jordan@example");
@@ -131,21 +132,21 @@ test("member errors stay in the form, settings persist, and reset restores the s
   await page.getByRole("button", { name: `Complete ${vehicleTask}`, exact: true }).click();
 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("textbox", { name: "Your full name", exact: true }).fill("Avery Morgan");
+  await page.getByRole("textbox", { name: "Demo owner name", exact: true }).fill("Avery Morgan");
   await page.getByRole("textbox", { name: "Organization name", exact: true }).fill("Maple House Team");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Workspace details saved.");
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Welcome back, Avery", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome back, Ahmand", exact: true })).toBeVisible();
   await expect(page.getByText("Maple House Team", { exact: true })).toBeVisible();
   await expectStats(page, { total: 12, completed: 9, pending: 3, overdue: 0 });
 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Your full name", exact: true })).toHaveValue("Avery Morgan");
+  await expect(page.getByRole("textbox", { name: "Demo owner name", exact: true })).toHaveValue("Avery Morgan");
   await expect(page.getByRole("textbox", { name: "Organization name", exact: true })).toHaveValue("Maple House Team");
   await page.getByRole("button", { name: "Reset demo", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Keep my changes", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Your full name", exact: true })).toHaveValue("Avery Morgan");
+  await expect(page.getByRole("textbox", { name: "Demo owner name", exact: true })).toHaveValue("Avery Morgan");
   await page.getByRole("button", { name: "Reset demo", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Reset demo", exact: true }).click();
 
@@ -161,10 +162,11 @@ test("member errors stay in the form, settings persist, and reset restores the s
 });
 
 test("corrupted saved data falls back to usable sample data", async ({ page }) => {
-  await page.addInitScript((key) => {
+  const identity = await loginAs(page);
+  await page.evaluate((key) => {
     window.localStorage.setItem(key, "{broken-json");
-  }, storageKey);
-  await page.goto("/");
+  }, storagePrefix + identity.id);
+  await page.reload();
 
   await expect(page.getByRole("status")).toContainText("Sample data has been restored.");
   await expectStats(page, { total: 12, completed: 8, pending: 3, overdue: 1 });
@@ -183,7 +185,7 @@ test("unavailable browser storage still allows task changes during the session",
       },
     });
   });
-  await page.goto("/");
+  await loginAs(page);
 
   await expect(page.getByRole("status")).toContainText("Browser storage is unavailable");
   await expectStats(page, { total: 12, completed: 8, pending: 3, overdue: 1 });

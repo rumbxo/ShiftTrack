@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { z } from "zod";
 import {
   createDemoTasks,
@@ -12,7 +12,6 @@ import {
   type Task,
 } from "@/lib/demo-data";
 
-const STORAGE_KEY = "shifttrack-demo-v1";
 const localTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const idSchema = z.string().min(1).max(100);
 const memberInputSchema = z.object({
@@ -75,6 +74,12 @@ const workspaceSchema = settingsSchema
     );
   }, "The saved demo contains invalid member or task references.");
 
+export type WorkspaceUser = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 type WorkspaceData = {
   tasks: Task[];
   members: Member[];
@@ -88,239 +93,268 @@ type WorkspaceSnapshot = WorkspaceData & {
   storageError: string | null;
 };
 
-function createDemoWorkspace(): WorkspaceData {
+function createDemoWorkspace(user: WorkspaceUser): WorkspaceData {
   return {
     tasks: createDemoTasks(),
-    members: demoMembers.map((member) => ({ ...member })),
+    members: demoMembers.map((member, index) =>
+      index === 0
+        ? {
+            ...member,
+            name: user.name,
+            initials: initials(user.name),
+            email: user.email,
+          }
+        : { ...member },
+    ),
     activity: demoActivity.map((entry) => ({ ...entry })),
     organization: "Oak Street Group Home",
-    name: "Ahmand Edmonds",
+    name: user.name,
   };
 }
 
-// Server rendering and the first hydration render share deterministic demo data.
-// Browser storage is read only after React subscribes on the client.
-const serverSnapshot: WorkspaceSnapshot = {
-  ...createDemoWorkspace(),
-  ready: false,
-  storageError: null,
-};
-let snapshot = serverSnapshot;
-const listeners = new Set<() => void>();
+// Each mounted workspace owns its state. Neither server renders nor different
+// signed-in accounts share a mutable snapshot or a browser storage namespace.
+function createWorkspaceStore(user: WorkspaceUser) {
+  const storageKey = `shifttrack-demo-v1:${user.id}`;
+  // Server rendering and the first hydration render share deterministic demo data.
+  // Browser storage is read only after React subscribes on the client.
+  const serverSnapshot: WorkspaceSnapshot = {
+    ...createDemoWorkspace(user),
+    ready: false,
+    storageError: null,
+  };
+  let snapshot = serverSnapshot;
+  const listeners = new Set<() => void>();
 
-function emitChange() {
-  listeners.forEach((listener) => listener());
-}
-
-function loadSavedWorkspace(raw: string | null): WorkspaceSnapshot {
-  if (raw === null) {
-    return { ...createDemoWorkspace(), ready: true, storageError: null };
+  function emitChange() {
+    listeners.forEach((listener) => listener());
   }
 
-  try {
-    const data = workspaceSchema.parse(JSON.parse(raw));
-    return { ...data, ready: true, storageError: null };
-  } catch {
-    return {
-      ...createDemoWorkspace(),
-      ready: true,
-      storageError:
-        "The saved demo could not be loaded. Sample data has been restored.",
-    };
-  }
-}
-
-function initialize() {
-  if (snapshot.ready || typeof window === "undefined") return;
-
-  try {
-    snapshot = loadSavedWorkspace(window.localStorage.getItem(STORAGE_KEY));
-  } catch {
-    snapshot = {
-      ...createDemoWorkspace(),
-      ready: true,
-      storageError:
-        "Browser storage is unavailable. Your changes will last for this session.",
-    };
-  }
-
-  emitChange();
-}
-
-function handleStorage(event: StorageEvent) {
-  if (event.key !== STORAGE_KEY && event.key !== null) return;
-
-  // Only localStorage changes belong to this store; ignore sessionStorage.
-  try {
-    if (event.storageArea !== window.localStorage) return;
-  } catch {
-    return;
-  }
-
-  snapshot = loadSavedWorkspace(event.key === null ? null : event.newValue);
-  emitChange();
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-
-  if (listeners.size === 1) window.addEventListener("storage", handleStorage);
-  initialize();
-
-  return () => {
-    listeners.delete(listener);
-    if (listeners.size === 0) {
-      window.removeEventListener("storage", handleStorage);
+  function loadSavedWorkspace(raw: string | null): WorkspaceSnapshot {
+    if (raw === null) {
+      return { ...createDemoWorkspace(user), ready: true, storageError: null };
     }
-  };
-}
 
-function getSnapshot() {
-  return snapshot;
-}
-
-function getServerSnapshot() {
-  return serverSnapshot;
-}
-
-function saveWorkspace(data: WorkspaceData) {
-  let storageError: string | null = null;
-
-  try {
-    // Persist only workspace data; readiness and storage errors are session state.
-    const { tasks, members, activity, organization, name } = data;
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ tasks, members, activity, organization, name }),
-    );
-  } catch {
-    storageError =
-      "Your changes are available for this session, but could not be saved in this browser.";
+    try {
+      const data = workspaceSchema.parse(JSON.parse(raw));
+      return { ...data, ready: true, storageError: null };
+    } catch {
+      return {
+        ...createDemoWorkspace(user),
+        ready: true,
+        storageError:
+          "The saved demo could not be loaded. Sample data has been restored.",
+      };
+    }
   }
 
-  snapshot = { ...data, ready: true, storageError };
-  emitChange();
-}
+  function initialize() {
+    if (snapshot.ready || typeof window === "undefined") return;
 
-function currentLocalTime() {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-}
+    try {
+      snapshot = loadSavedWorkspace(window.localStorage.getItem(storageKey));
+    } catch {
+      snapshot = {
+        ...createDemoWorkspace(user),
+        ready: true,
+        storageError:
+          "Browser storage is unavailable. Your changes will last for this session.",
+      };
+    }
 
-function addTask(input: Omit<Task, "id" | "status" | "completedAt">) {
-  initialize();
-  const taskInput = taskInputSchema.parse(input);
-
-  if (!snapshot.members.some((member) => member.id === taskInput.assigneeId)) {
-    throw new Error("Choose a team member from this workspace.");
+    emitChange();
   }
 
-  const task: Task = {
-    ...taskInput,
-    id: crypto.randomUUID(),
-    // Recurrence and overdue scheduling are preview settings in this local demo.
-    status: "pending",
-  };
-  const creator =
-    snapshot.members.find((member) => member.role === "owner") ??
-    snapshot.members[0];
-  const entry: Activity = {
-    id: crypto.randomUUID(),
-    taskTitle: task.title,
-    memberId: creator.id,
-    type: "created",
-    time: currentLocalTime(),
-  };
+  function handleStorage(event: StorageEvent) {
+    if (event.key !== storageKey && event.key !== null) return;
 
-  saveWorkspace({
-    ...snapshot,
-    tasks: [task, ...snapshot.tasks],
-    activity: [entry, ...snapshot.activity],
-  });
-  return task;
-}
+    // Only localStorage changes belong to this store; ignore sessionStorage.
+    try {
+      if (event.storageArea !== window.localStorage) return;
+    } catch {
+      return;
+    }
 
-function completeTask(taskId: string) {
-  initialize();
-  const task = snapshot.tasks.find((entry) => entry.id === taskId);
-  if (!task || task.status === "completed") return;
-
-  const time = currentLocalTime();
-  const entry: Activity = {
-    id: crypto.randomUUID(),
-    taskTitle: task.title,
-    memberId: task.assigneeId,
-    type: "completed",
-    time,
-  };
-
-  saveWorkspace({
-    ...snapshot,
-    tasks: snapshot.tasks.map((entry) =>
-      entry.id === taskId
-        ? { ...entry, status: "completed", completedAt: time }
-        : entry,
-    ),
-    activity: [entry, ...snapshot.activity],
-  });
-}
-
-function addMember(input: Omit<Member, "id" | "initials" | "color">) {
-  initialize();
-  const memberInput = memberInputSchema.parse(input);
-
-  if (
-    snapshot.members.some(
-      (member) => member.email.toLowerCase() === memberInput.email.toLowerCase(),
-    )
-  ) {
-    throw new Error("A team member with this email already exists.");
+    snapshot = loadSavedWorkspace(event.key === null ? null : event.newValue);
+    emitChange();
   }
 
-  const member: Member = {
-    ...memberInput,
-    id: crypto.randomUUID(),
-    initials: initials(memberInput.name),
-    color: demoMembers[snapshot.members.length % demoMembers.length].color,
-  };
+  function subscribe(listener: () => void) {
+    listeners.add(listener);
 
-  saveWorkspace({ ...snapshot, members: [...snapshot.members, member] });
-  return member;
-}
+    if (listeners.size === 1) window.addEventListener("storage", handleStorage);
+    initialize();
 
-function updateSettings(input: { organization: string; name: string }) {
-  initialize();
-  const settings = settingsSchema.parse(input);
-  const owner = snapshot.members.find((member) => member.role === "owner");
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        window.removeEventListener("storage", handleStorage);
+      }
+    };
+  }
 
-  saveWorkspace({
-    ...snapshot,
-    ...settings,
-    members: snapshot.members.map((member) =>
-      member.id === owner?.id
-        ? { ...member, name: settings.name, initials: initials(settings.name) }
-        : member,
-    ),
-  });
-}
+  function getSnapshot() {
+    return snapshot;
+  }
 
-function resetDemo() {
-  saveWorkspace(createDemoWorkspace());
-}
+  function getServerSnapshot() {
+    return serverSnapshot;
+  }
 
-export function useWorkspace() {
-  const workspace = useSyncExternalStore(
+  function saveWorkspace(data: WorkspaceData) {
+    let storageError: string | null = null;
+
+    try {
+      // Persist only workspace data; readiness and storage errors are session state.
+      const { tasks, members, activity, organization, name } = data;
+      window.localStorage.setItem(
+        storageKey,
+        JSON.stringify({ tasks, members, activity, organization, name }),
+      );
+    } catch {
+      storageError =
+        "Your changes are available for this session, but could not be saved in this browser.";
+    }
+
+    snapshot = { ...data, ready: true, storageError };
+    emitChange();
+  }
+
+  function currentLocalTime() {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function addTask(input: Omit<Task, "id" | "status" | "completedAt">) {
+    initialize();
+    const taskInput = taskInputSchema.parse(input);
+
+    if (!snapshot.members.some((member) => member.id === taskInput.assigneeId)) {
+      throw new Error("Choose a team member from this workspace.");
+    }
+
+    const task: Task = {
+      ...taskInput,
+      id: crypto.randomUUID(),
+      // Recurrence and overdue scheduling are preview settings in this local demo.
+      status: "pending",
+    };
+    const creator =
+      snapshot.members.find((member) => member.role === "owner") ??
+      snapshot.members[0];
+    const entry: Activity = {
+      id: crypto.randomUUID(),
+      taskTitle: task.title,
+      memberId: creator.id,
+      type: "created",
+      time: currentLocalTime(),
+    };
+
+    saveWorkspace({
+      ...snapshot,
+      tasks: [task, ...snapshot.tasks],
+      activity: [entry, ...snapshot.activity],
+    });
+    return task;
+  }
+
+  function completeTask(taskId: string) {
+    initialize();
+    const task = snapshot.tasks.find((entry) => entry.id === taskId);
+    if (!task || task.status === "completed") return;
+
+    const time = currentLocalTime();
+    const entry: Activity = {
+      id: crypto.randomUUID(),
+      taskTitle: task.title,
+      memberId: task.assigneeId,
+      type: "completed",
+      time,
+    };
+
+    saveWorkspace({
+      ...snapshot,
+      tasks: snapshot.tasks.map((entry) =>
+        entry.id === taskId
+          ? { ...entry, status: "completed", completedAt: time }
+          : entry,
+      ),
+      activity: [entry, ...snapshot.activity],
+    });
+  }
+
+  function addMember(input: Omit<Member, "id" | "initials" | "color">) {
+    initialize();
+    const memberInput = memberInputSchema.parse(input);
+
+    if (
+      snapshot.members.some(
+        (member) => member.email.toLowerCase() === memberInput.email.toLowerCase(),
+      )
+    ) {
+      throw new Error("A team member with this email already exists.");
+    }
+
+    const member: Member = {
+      ...memberInput,
+      id: crypto.randomUUID(),
+      initials: initials(memberInput.name),
+      color: demoMembers[snapshot.members.length % demoMembers.length].color,
+    };
+
+    saveWorkspace({ ...snapshot, members: [...snapshot.members, member] });
+    return member;
+  }
+
+  function updateSettings(input: { organization: string; name: string }) {
+    initialize();
+    const settings = settingsSchema.parse(input);
+    const owner = snapshot.members.find((member) => member.role === "owner");
+
+    saveWorkspace({
+      ...snapshot,
+      ...settings,
+      members: snapshot.members.map((member) =>
+        member.id === owner?.id
+          ? { ...member, name: settings.name, initials: initials(settings.name) }
+          : member,
+      ),
+    });
+  }
+
+  function resetDemo() {
+    saveWorkspace(createDemoWorkspace(user));
+  }
+
+  return {
     subscribe,
     getSnapshot,
     getServerSnapshot,
-  );
-
-  return {
-    ...workspace,
     addTask,
     completeTask,
     addMember,
     updateSettings,
     resetDemo,
+  };
+}
+
+export function useWorkspace({ id, name, email }: WorkspaceUser) {
+  const store = useMemo(
+    () => createWorkspaceStore({ id, name, email }),
+    [id, name, email],
+  );
+  const workspace = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getServerSnapshot,
+  );
+
+  return {
+    ...workspace,
+    addTask: store.addTask,
+    completeTask: store.completeTask,
+    addMember: store.addMember,
+    updateSettings: store.updateSettings,
+    resetDemo: store.resetDemo,
   };
 }
