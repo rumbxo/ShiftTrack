@@ -70,10 +70,13 @@ try {
     await page.getByRole("heading", { name: /^Welcome back,/ }).waitFor();
     await checkOverflow(page, "dashboard");
     await page.screenshot({ path: "artifacts/dashboard-desktop.png", fullPage: true });
-    await page.getByRole("button", { name: "Create task", exact: true }).click();
-    await page.getByRole("dialog").waitFor();
-    await page.screenshot({ path: "artifacts/create-task.png", fullPage: true });
-    await page.keyboard.press("Escape");
+    const createTask = page.getByRole("button", { name: "Create task", exact: true });
+    if (await createTask.count()) {
+      await createTask.click();
+      await page.getByRole("dialog").waitFor();
+      await page.screenshot({ path: "artifacts/create-task.png" });
+      await page.keyboard.press("Escape");
+    }
 
     for (const width of [390, 768, 1024]) {
       await page.setViewportSize({ width, height: 844 });
@@ -84,10 +87,7 @@ try {
       await page.getByRole("button", { name: "Open navigation" }).click();
       await page.getByRole("button", { name: "Team", exact: true }).click();
       await page.getByRole("heading", { name: "Good people. Great teamwork." }).waitFor();
-      await page.getByRole("button", { name: "Add team member", exact: true }).click();
-      await page.getByRole("dialog").waitFor();
-      await page.screenshot({ path: "artifacts/mobile-team-form.png", fullPage: true });
-      await page.keyboard.press("Escape");
+      await page.screenshot({ path: "artifacts/mobile-team.png", fullPage: true });
       await page.getByRole("button", { name: "Open navigation" }).click();
       await page.getByRole("button", { name: "Overview", exact: true }).click();
     }

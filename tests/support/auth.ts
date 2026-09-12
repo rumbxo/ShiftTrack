@@ -31,17 +31,89 @@ export async function seedUser(
 
 export async function loginAs(
   page: Page,
-  options: { email?: string; name?: string; password?: string } = {},
+  options: { email?: string; name?: string; password?: string; organizationName?: string; withoutOrganization?: boolean } = {},
 ) {
   const identity = await seedUser(page.request, options);
+  if (!options.withoutOrganization) {
+    await seedOrganization(page.request, { ownerId: identity.id, name: options.organizationName });
+  }
   const response = await page.request.post("/api/auth/login", {
     headers: { Origin: appOrigin },
     data: { email: identity.email, password: identity.password },
   });
   expect(response.ok(), await response.text()).toBeTruthy();
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(options.withoutOrganization ? /\/onboarding$/ : /\/dashboard$/);
   return identity;
+}
+
+export async function seedOrganization(
+  request: APIRequestContext,
+  options: { ownerId: string; name?: string },
+): Promise<{ id: string; name: string; created_at: string }> {
+  const response = await request.post(`${authFixtureOrigin}/__test/organizations`, { data: options });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  return response.json();
+}
+
+export async function seedMembership(
+  request: APIRequestContext,
+  options: { organizationId: string; userId: string; role: "manager" | "employee" },
+): Promise<{ id: string; organization_id: string; user_id: string; role: string }> {
+  const response = await request.post(`${authFixtureOrigin}/__test/memberships`, { data: options });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  return response.json();
+}
+
+export type FixtureTaskInput = {
+  title: string;
+  description?: string;
+  category?: "Safety" | "Operations" | "Documentation" | "Maintenance" | "Team";
+  assigneeId?: string | null;
+  dueAt?: string;
+  frequency?: "once" | "daily" | "weekly" | "monthly";
+  timeZone?: string;
+};
+
+export async function seedTask(
+  request: APIRequestContext,
+  options: FixtureTaskInput & { organizationId: string; createdBy: string; completedAt?: string; completedBy?: string },
+): Promise<{ id: string; organization_id: string; title: string; assignee_id: string | null; due_at: string }> {
+  const response = await request.post(`${authFixtureOrigin}/__test/tasks`, { data: options });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  return response.json();
+}
+
+export function taskInput(options: FixtureTaskInput) {
+  return {
+    description: "Check shared areas and secure the supply cupboard.",
+    category: "Safety",
+    assigneeId: null,
+    dueAt: new Date(Date.now() + 86_400_000).toISOString(),
+    frequency: "once",
+    timeZone: "UTC",
+    ...options,
+  };
+}
+
+export async function taskMutation(request: APIRequestContext, path: string, data: Record<string, unknown>) {
+  return request.post(`/api/tasks${path}`, { headers: { Origin: appOrigin }, data });
+}
+
+export async function savedTasks(request: APIRequestContext) {
+  const response = await request.get("/api/tasks");
+  expect(response.ok(), await response.text()).toBeTruthy();
+  return response.json() as Promise<{
+    tasks: Array<{ id: string; title: string; description: string; assigneeId: string | null; dueAt: string; frequency: string; completedAt: string | null; completedBy: string | null; parentTaskId: string | null }>;
+    members: Array<{ id: string; userId: string; name: string; role: string }>;
+  }>;
+}
+
+export async function createWorkspace(page: Page, name = "Oak Street Group Home") {
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.getByLabel("Organization name", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Create workspace", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 export async function fixtureEmailLink(

@@ -1,10 +1,13 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import {
   appOrigin,
+  createWorkspace,
   fixtureEmailLink,
   fixturePassword,
   loginAs,
   seedUser,
+  seedOrganization,
+  seedTask,
   uniqueEmail,
 } from "./support/auth";
 
@@ -44,6 +47,7 @@ test("signed-out users cannot open the dashboard or password update page", async
 
 test("login reports invalid credentials, preserves verified identity after reload, and logout protects revisits", async ({ page }) => {
   const identity = await seedUser(page.request, { name: "Riley Morgan" });
+  await seedOrganization(page.request, { ownerId: identity.id });
   await page.goto("/login");
   await submitLogin(page, identity.email, "Wrong-password-123!");
   await expect(page.getByRole("main").getByRole("alert")).toContainText(/email or password is incorrect/i);
@@ -80,7 +84,8 @@ test("registration checks matching passwords and completes an email confirmation
 
   const link = await fixtureEmailLink(page.request, { email, type: "signup" });
   await page.goto(link.url);
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await createWorkspace(page);
   await expect(page.getByRole("heading", { name: "Welcome back, Riley", exact: true })).toBeVisible();
 });
 
@@ -91,7 +96,8 @@ test("token-hash confirmation works in a fresh browser and rejects replayed link
   const page = await context.newPage();
   try {
     await page.goto(link.confirmationUrl);
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(/\/onboarding$/);
+    await createWorkspace(page);
     await expect(page.getByRole("heading", { name: "Welcome back, Riley", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page).toHaveURL(/\/login$/);
@@ -105,6 +111,7 @@ test("token-hash confirmation works in a fresh browser and rejects replayed link
 
 test("password recovery hides account existence and updates the password using the emailed link", async ({ page }) => {
   const identity = await seedUser(page.request, { name: "Casey Taylor" });
+  await seedOrganization(page.request, { ownerId: identity.id });
   const responses = [];
   for (const email of [identity.email, uniqueEmail("unknown")]) {
     const response = await page.request.post("/api/auth/forgot-password", {
@@ -151,7 +158,7 @@ test("invalid recovery links show a usable error and callback destinations stay 
   const callback = new URL(link.url);
   callback.searchParams.set("next", "https://example.com/outside-app");
   await page.goto(callback.toString());
-  await expect(page).toHaveURL(`${appOrigin}/dashboard`);
+  await expect(page).toHaveURL(`${appOrigin}/onboarding`);
 });
 
 test("cross-origin authentication mutations are rejected and server validation cannot be skipped", async ({ page, request }) => {
@@ -174,32 +181,38 @@ test("cross-origin authentication mutations are rejected and server validation c
   expect(await response.json()).toMatchObject({ error: expect.stringMatching(/8/) });
 });
 
-test("switching accounts in one browser keeps each account's sample tasks separate", async ({ page }) => {
+test("switching accounts in one browser loads each account's saved workspace tasks", async ({ page }) => {
   const first = await loginAs(page, { name: "Riley Morgan" });
   const task = "Complete vehicle safety check";
+  const organization = await seedOrganization(page.request, { ownerId: first.id });
+  await seedTask(page.request, { organizationId: organization.id, createdBy: first.id, title: task });
+  await page.reload();
   await page.getByRole("button", { name: `Complete ${task}`, exact: true }).click();
-  await expect(page.getByRole("button", { name: "Show completed: 9", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show completed: 1", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
 
   await loginAs(page, { name: "Casey Taylor" });
   await expect(page.getByRole("heading", { name: "Welcome back, Casey", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Show completed: 8", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: `Complete ${task}`, exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Show tasks assigned: 0", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Complete ${task}`, exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
 
   await submitLogin(page, first.email);
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: "Welcome back, Riley", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Show completed: 9", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show completed: 1", exact: true })).toBeVisible();
 });
 
-test("confirming another account in a second tab updates the original tab and its sample data", async ({ page, context }) => {
-  await loginAs(page, { name: "Riley Morgan" });
+test("confirming another account in a second tab replaces the original tab's workspace tasks", async ({ page, context }) => {
+  const first = await loginAs(page, { name: "Riley Morgan" });
   const task = "Complete vehicle safety check";
+  const organization = await seedOrganization(page.request, { ownerId: first.id });
+  await seedTask(page.request, { organizationId: organization.id, createdBy: first.id, title: task });
+  await page.reload();
   await page.getByRole("button", { name: `Complete ${task}`, exact: true }).click();
-  await expect(page.getByRole("button", { name: "Show completed: 9", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show completed: 1", exact: true })).toBeVisible();
 
   const second = await registerViaApi(page.request, "Casey Taylor");
   const link = await fixtureEmailLink(page.request, { email: second.email, type: "signup" });
@@ -209,15 +222,17 @@ test("confirming another account in a second tab updates the original tab and it
   try {
     // Email callbacks replace cookies without the login form's storage event.
     await callbackPage.goto(link.confirmationUrl);
-    await expect(callbackPage).toHaveURL(/\/dashboard$/);
+    await expect(callbackPage).toHaveURL(/\/onboarding$/);
+    await expect(page).toHaveURL(/\/onboarding$/);
+    await createWorkspace(callbackPage);
     await expect(callbackPage.getByRole("heading", { name: "Welcome back, Casey", exact: true })).toBeVisible();
 
     // The original tab must update automatically, without a manual reload.
     await expect(page.getByRole("heading", { name: "Welcome back, Casey", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Welcome back, Riley", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Show completed: 8", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: `Complete ${task}`, exact: true })).toBeEnabled();
-    await expect(callbackPage.getByRole("button", { name: "Show completed: 8", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show tasks assigned: 0", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Complete ${task}`, exact: true })).toHaveCount(0);
+    await expect(callbackPage.getByRole("button", { name: "Show tasks assigned: 0", exact: true })).toBeVisible();
   } finally {
     await callbackPage.close();
   }

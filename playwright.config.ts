@@ -19,7 +19,9 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: "npm run dev -- --port 3100",
+      // Exercise production routing; dev on-demand compilation can trigger HMR
+      // reloads while another test is checking a slow database failure.
+      command: "npm run build && npm run start -- --port 3100",
       env: {
         NEXT_DIST_DIR: ".next/e2e",
         NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:3101",

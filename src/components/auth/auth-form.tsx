@@ -5,6 +5,7 @@ import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, Eye, EyeOff, LoaderCircle, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { pauseIdentityChecks } from "@/lib/auth/identity-mutation";
 
 export type AuthMode = "login" | "register" | "forgot-password" | "reset-password";
 
@@ -46,6 +47,8 @@ export function AuthForm({ mode, initialError = "", initialMessage = "", next = 
     }
 
     setPending(true);
+    const resumeChecks = pauseIdentityChecks();
+    let navigating = false;
     try {
       const response = await fetch(`/api/auth/${mode}`, {
         method: "POST",
@@ -59,6 +62,7 @@ export function AuthForm({ mode, initialError = "", initialMessage = "", next = 
       }
 
       if (result.redirectTo === "/dashboard" || result.redirectTo === "/reset-password" || result.redirectTo === "/login?message=password-updated") {
+        navigating = true;
         try { localStorage.setItem("shifttrack-auth-change", crypto.randomUUID()); } catch { /* Login also works without local storage. */ }
         // A fresh document clears any cached view of the previous auth session.
         window.location.assign(result.redirectTo);
@@ -71,6 +75,7 @@ export function AuthForm({ mode, initialError = "", initialMessage = "", next = 
     } catch {
       setError("We couldn’t connect. Check your internet connection and try again.");
     } finally {
+      if (!navigating) resumeChecks();
       setPending(false);
     }
   }

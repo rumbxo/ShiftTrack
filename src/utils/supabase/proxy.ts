@@ -35,10 +35,14 @@ export async function updateSession(request: NextRequest) {
   // current token and refreshes an expired session before returning its cookies.
   const { data, error } = await supabase.auth.getClaims();
 
-  const isDashboard = request.nextUrl.pathname === "/dashboard" || request.nextUrl.pathname.startsWith("/dashboard/");
-  if (isDashboard) {
+  const path = request.nextUrl.pathname;
+  const isProtectedPage = path === "/dashboard" || path.startsWith("/dashboard/") || path === "/workspace" || path === "/onboarding";
+  if (isProtectedPage) {
     response.headers.set("Cache-Control", "private, no-store");
-    if (error || !data?.claims?.sub) {
+    // An Auth outage is not a confirmed sign-out. The page still verifies the
+    // user and displays an unavailable state without rendering workspace data.
+    const unavailable = error && (!error.status || error.status === 429 || error.status >= 500);
+    if (!unavailable && (error || !data?.claims?.sub)) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = "/login";
       loginUrl.search = "";

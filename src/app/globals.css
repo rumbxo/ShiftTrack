@@ -572,6 +572,87 @@ h1 { margin: 0; display: flex; align-items: center; gap: 11px; font-size: clamp(
 .auth-spinner { animation: auth-spin 1s linear infinite; }
 .sign-out-error { font-size: 10px; color: #a35e48; margin: 5px 13px; }
 @keyframes auth-spin { to { transform: rotate(360deg); } }
+.onboarding-team-note { display: flex; gap: 13px; margin: 28px 0 18px; padding: 19px; background: #f1f5e9; border: 1px solid #e3e9d9; border-radius: 9px; color: #5f7550; }
+.onboarding-team-note>svg { flex-shrink: 0; margin-top: 2px; }
+.onboarding-team-note strong { font-size: 12px; font-weight: 600; }
+.onboarding-team-note p { margin: 8px 0 15px; font-size: 11px; line-height: 1.85; }
+.onboarding-team-note b { font-weight: 500; overflow-wrap: anywhere; }
+.organization-shell { min-height: 100dvh; background: #f8f9f5; }
+.organization-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 26px max(30px, calc((100vw - 1180px) / 2)); border-bottom: 1px solid #e5e9df; background: #fdfefa; }
+.organization-header .brand { padding: 0; text-decoration: none; }
+.organization-header-actions { display: flex; align-items: center; gap: 15px; }
+.organization-header-actions .nav-item { width: auto; }
+.organization-main { max-width: 1180px; margin: 0 auto; padding: 38px 30px 70px; }
+.organization-main>.auth-back { margin-bottom: 28px; }
+.organization-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 35px; }
+.organization-heading h1 { font-size: 32px; letter-spacing: -1.15px; }
+.organization-heading p { color: #6b7a60; margin: 10px 0 0; line-height: 1.7; }
+.cloud-badge { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; color: #5d7647; font-size: 11px; padding: 9px 12px; background: #eef3e6; border: 1px solid #e1e8d7; border-radius: 6px; }
+.organization-grid { display: grid; grid-template-columns: minmax(0, 1fr) 275px; gap: 27px; align-items: start; }
+.organization-primary { display: flex; flex-direction: column; gap: 25px; min-width: 0; }
+.organization-error { margin-bottom: 25px; }
+.organization-primary .panel-heading { padding: 23px 25px; gap: 20px; }
+.organization-primary .panel-heading p { line-height: 1.75; max-width: 470px; }
+.organization-primary .panel-heading>svg { color: #8a9b77; flex-shrink: 0; }
+.organization-form { padding: 24px 25px; display: flex; align-items: flex-end; flex-wrap: wrap; gap: 18px; }
+.organization-form>label { display: flex; flex-direction: column; flex: 1 1 200px; gap: 9px; font-size: 12px; font-weight: 500; color: #516747; min-width: 0; }
+.organization-form input { font-size: 13px; height: 42px; background: white; }
+.organization-form select, .organization-member-controls select { height: 42px; padding: 0 11px; border: 1px solid #e0e5d9; border-radius: 7px; background: white; color: #566d47; }
+.organization-form>.ui-button { height: 42px; }
+.organization-readonly { padding: 25px; }
+.organization-readonly>strong { font-size: 19px; font-weight: 550; overflow-wrap: anywhere; }
+.organization-readonly p { color: #728064; font-size: 12px; line-height: 1.7; margin: 12px 0 0; }
+.organization-member-list { list-style: none; margin: 0; padding: 0; }
+.organization-member { display: flex; align-items: center; gap: 13px; flex-wrap: wrap; padding: 22px 25px; border-bottom: 1px solid #eef1e9; }
+.organization-member:last-child { border-bottom: 0; }
+.organization-avatar { width: 38px; height: 38px; display: grid; place-items: center; background: #eaf0e2; color: #65804c; border-radius: 50%; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.organization-member-identity { flex: 1 1 150px; min-width: 0; }
+.organization-member-identity>strong { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+.organization-member-identity>span { display: block; font-size: 11px; color: #6a7b5a; margin-top: 6px; overflow-wrap: anywhere; }
+.member-you { color: #82916f; font-size: 9px; font-weight: 400; }
+.organization-member-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.organization-member-controls select { height: 32px; font-size: 11px; max-width: 130px; }
+.organization-member-controls .ui-button { font-size: 11px; }
+.remove-member { color: #a46550; font-size: 10px; padding: 9px 4px; }
+.remove-member:hover { text-decoration: underline; }
+.organization-add-form>label:first-child { flex-basis: 260px; }
+.organization-add-form>label:nth-child(2) { flex: 0 1 140px; }
+.organization-form-note { width: 100%; margin: 0; color: #6f7e61; font-size: 11px; line-height: 1.8; }
+.organization-access-card { background: #eaf0e0; border: 1px solid #e0e7d4; border-radius: 11px; padding: 25px; }
+.organization-card-icon { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #d9e3cb; border-radius: 12px; color: #78945a; background: #f4f7ef; margin-bottom: 22px; }
+.organization-access-card h2 { color: #47633a; font-size: 22px; font-weight: 520; line-height: 1.35; letter-spacing: -.6px; margin: 0; }
+.organization-access-card>p { color: #687e53; font-size: 12px; line-height: 1.75; margin: 14px 0 25px; }
+.organization-access-card dl { margin: 0; }
+.organization-access-card dl>div { padding: 17px 0; border-top: 1px solid #dce5d0; }
+.organization-access-card dl>div:last-child { padding-bottom: 0; }
+.organization-access-card dt { font-size: 12px; font-weight: 600; color: #4f6c3b; }
+.organization-access-card dd { margin: 8px 0 0; color: #687e53; font-size: 11px; line-height: 1.85; }
+.organization-preview-note { padding: 25px 10px 0; color: #7e916a; }
+.organization-preview-note p { color: #6d7f5c; font-size: 11px; line-height: 1.9; margin: 12px 0 17px; }
+.organization-preview-note a { display: inline-flex; align-items: center; gap: 8px; color: #537739; font-size: 11px; }
+@media (max-width: 900px) {
+  .organization-grid { grid-template-columns: minmax(0, 1fr) 235px; gap: 20px; }
+  .organization-member-controls { padding-left: 51px; width: 100%; }
+}
+@media (max-width: 700px) {
+  .organization-header { padding: 22px 20px; gap: 8px; }
+  .organization-header .brand { font-size: 22px; }
+  .organization-header .brand-mark { width: 30px; height: 30px; margin-right: 7px; }
+  .organization-header-actions { gap: 4px; }
+  .organization-header-actions>.role-badge { display: none; }
+  .organization-header-actions .nav-item { font-size: 11px; padding: 8px; gap: 6px; }
+  .organization-main { padding: 30px 18px 45px; }
+  .organization-heading { align-items: flex-start; margin-bottom: 25px; }
+  .organization-heading h1 { font-size: 28px; }
+  .cloud-badge { font-size: 0; border: 0; background: transparent; padding: 5px 0; }
+  .cloud-badge svg { width: 22px; height: 22px; }
+  .organization-grid { grid-template-columns: minmax(0, 1fr); }
+  .organization-primary .panel-heading, .organization-form, .organization-member, .organization-readonly { padding: 21px 18px; }
+  .organization-form input { font-size: 16px; }
+  .organization-member-identity { flex-basis: 120px; }
+  .organization-member-controls { padding-left: 0; }
+  .organization-access-card { padding: 24px; }
+}
 @media (max-width: 1000px) {
   .auth-main { padding: 35px 9%; }
   .auth-story { padding: 40px 9%; }
@@ -589,3 +670,14 @@ h1 { margin: 0; display: flex; align-items: center; gap: 11px; font-size: clamp(
   .auth-brand { font-size: 25px; }
   .auth-form input { font-size: 16px; }
 }
+.task-form-fields { display: flex; flex-direction: column; gap: 18px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.task-form-fields:disabled { opacity: .7; }
+.task-due-date { display: inline-block; max-width: 130px; white-space: normal; line-height: 1.6; }
+.activity-empty { margin: 0; padding: 4px 0 18px; color: #6d7d59; font-size: 12px; line-height: 1.7; }
+.account-details { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.account-details dt { color: #6d7d59; font-size: 11px; margin-bottom: 6px; }
+.account-details dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.storage-notice button, .team-note a { text-decoration: underline; text-underline-offset: 3px; }
+.refresh-spinning { animation: refresh-spin 1s linear infinite; }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .refresh-spinning { animation: none; } }

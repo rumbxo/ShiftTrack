@@ -199,8 +199,27 @@ test.describe("Supabase session setup", () => {
     expect(response.headers.get("cache-control")).toContain("no-store");
   });
 
+  test("a temporary Auth rate limit preserves cookies for the page's verified error handling", async () => {
+    globalThis.fetch = async (input) => {
+      const url = new URL(String(input));
+      if (url.origin === projectUrl && url.pathname === "/auth/v1/user") {
+        return jsonResponse({ code: "over_request_rate_limit", message: "Too many requests" }, 429);
+      }
+      unexpectedRequests.push(url.toString());
+      throw new Error("Unexpected auth request.");
+    };
+    const encoded = `base64-${Buffer.from(JSON.stringify(session(Math.floor(Date.now() / 1000) + 3600, "active-refresh-token"))).toString("base64url")}`;
+    const request = new NextRequest("http://localhost:3000/workspace", { headers: { cookie: `${sessionCookie}=${encoded}` } });
+    const response = await updateSession(request);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.cookies.getAll()).toEqual([]);
+    expect(request.cookies.get(sessionCookie)?.value).toBe(encoded);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+  });
+
   test("proxy covers application and auth routes while excluding static assets", () => {
-    for (const url of ["/", "/dashboard", "/auth/callback?code=test", "/api/tasks"]) {
+    for (const url of ["/", "/dashboard", "/workspace", "/onboarding", "/auth/callback?code=test", "/api/organizations", "/api/tasks"]) {
       expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url }), url).toBe(true);
     }
     for (const url of [
